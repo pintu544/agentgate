@@ -1,0 +1,33 @@
+{
+  "name": "agentgate-seller",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AgentGate seller service: Self Agent ID gated, x402-paid prospect research snapshots on Celo mainnet.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@selfxyz/agent-sdk": "0.3.1",
+    "@x402/core": "^2.32.0",
+    "@x402/evm": "^2.32.0",
+    "@x402/express": "^2.32.0",
+    "express": "^4.21.2",
+    "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
