@@ -28,6 +28,7 @@ import {
   type SellerConfig,
 } from "./config.js";
 import { verifyAgentRequest } from "./selfVerifier.js";
+import { publicAgentError } from "./agentErrors.js";
 import { appendCallLog, readCallLog, type CallResult } from "./callLog.js";
 import { generateSnapshot } from "./exa.js";
 
@@ -40,7 +41,10 @@ declare global {
 }
 
 interface CallLocals {
+  /** Verified caller address; null until verification succeeds (W3). */
   caller: string | null;
+  /** Unauthenticated address claimed in the request header (W3). */
+  claimedAddress: string | null;
   verified: boolean;
   agentId?: string;
   topic?: string;
@@ -63,7 +67,11 @@ function escapeHtml(value: string): string {
 function callLogContext(cfg: SellerConfig) {
   return (req: Request, res: Response, next: NextFunction) => {
     const startedAt = new Date().toISOString();
-    res.locals.caller = req.header("x-self-agent-address") ?? null;
+    // W3: the header address is an unauthenticated claim. It is kept
+    // apart from `caller`, which is only set once verification succeeds,
+    // so a denied attempt can never be attributed to the claimed address.
+    res.locals.caller = null;
+    res.locals.claimedAddress = req.header("x-self-agent-address") ?? null;
     res.locals.verified = false;
     res.on("finish", () => {
       const status = res.statusCode;
@@ -91,6 +99,9 @@ function callLogContext(cfg: SellerConfig) {
           caller: l.caller,
           verified: l.verified,
           result,
+          ...(!l.verified && l.claimedAddress
+            ? { claimedAddress: l.claimedAddress }
+            : {}),
           ...(l.error ? { error: l.error } : {}),
           ...(l.topic ? { topic: l.topic } : {}),
           ...(l.agentId ? { agentId: l.agentId } : {}),
@@ -140,7 +151,11 @@ function requireVerifiedAgent(cfg: SellerConfig) {
       return;
     }
     if (!result.valid) {
-      deny(res, result.error ?? "Agent not verified on-chain");
+      // C1 defence in depth: the wrapper already sanitises, but the
+      // string shown to the caller and written to the public log is
+      // passed through the safe-list here too, so nothing the verifier
+      // layer returns can leak internals (URLs, paths, upstream text).
+      deny(res, publicAgentError(result.error ?? "Agent not verified on-chain"));
       return;
     }
     const l = locals(res);
@@ -259,6 +274,7 @@ export function createApp(overrides: Partial<SellerConfig> = {}) {
       .map(
         (e) =>
           `<tr><td>${escapeHtml(e.ts)}</td><td>${escapeHtml(e.caller ?? "—")}</td>` +
+          `<td>${escapeHtml(e.claimedAddress ? `claimed: ${e.claimedAddress}` : "—")}</td>` +
           `<td>${e.verified ? "yes" : "no"}</td><td>${escapeHtml(e.result)}</td>` +
           `<td>${escapeHtml(e.topic ?? "")}</td><td>${escapeHtml(e.error ?? "")}</td>` +
           `<td>${escapeHtml(e.settlement ?? "")}</td></tr>`,
@@ -270,7 +286,7 @@ export function createApp(overrides: Partial<SellerConfig> = {}) {
         `<!doctype html><html><head><meta charset="utf-8"><title>AgentGate — call log</title></head>` +
           `<body><h1>AgentGate call log</h1><p>Every POST /api/snapshot attempt, newest first.</p>` +
           `<table border="1" cellspacing="0" cellpadding="4"><thead><tr><th>Time (UTC)</th><th>Caller</th>` +
-          `<th>Verified</th><th>Result</th><th>Topic</th><th>Error</th><th>Settlement tx</th></tr></thead>` +
+          `<th>Claimed</th><th>Verified</th><th>Result</th><th>Topic</th><th>Error</th><th>Settlement tx</th></tr></thead>` +
           `<tbody>${rows}</tbody></table></body></html>`,
       );
   });

@@ -14,6 +14,14 @@
  */
 import { SelfAgentVerifier } from "@selfxyz/agent-sdk";
 import type { SellerConfig } from "./config.js";
+import { publicAgentError } from "./agentErrors.js";
+
+/**
+ * Per-agent verification rate limit (QA finding W2). The SDK enforces
+ * it as an in-memory sliding window keyed by agent; generous enough
+ * that demo traffic (a handful of calls) never notices it.
+ */
+const VERIFY_RATE_LIMIT_PER_MINUTE = 30;
 
 export interface AgentVerifyInput {
   signature: string;
@@ -47,6 +55,7 @@ function getVerifier(cfg: SellerConfig): SelfAgentVerifier {
         // mainnet; the SDK default of 1 would falsely deny later agents
         // registered by the same human (research.md §1).
         sybilLimit: 10,
+        rateLimit: { perMinute: VERIFY_RATE_LIMIT_PER_MINUTE },
         ...(cfg.selfRpcUrl ? { rpcUrl: cfg.selfRpcUrl } : {}),
       }),
     };
@@ -79,7 +88,16 @@ export async function verifyAgentRequest(
       }),
     ]);
     if (!result.valid) {
-      return { valid: false, error: result.error ?? "Agent not verified on-chain" };
+      // C1: only fixed, content-free denial strings may reach the
+      // caller / public log; anything else (e.g. an RPC error embedding
+      // a credentialed URL) collapses to the generic message, with the
+      // original kept server-side only.
+      const rawError = result.error ?? "Agent not verified on-chain";
+      const safeError = publicAgentError(rawError);
+      if (safeError !== rawError) {
+        console.error("[agentgate] Self verification denied; detail withheld:", rawError);
+      }
+      return { valid: false, error: safeError };
     }
     return {
       valid: true,
@@ -87,10 +105,14 @@ export async function verifyAgentRequest(
       agentId: result.agentId !== undefined ? result.agentId.toString() : undefined,
     };
   } catch (err) {
-    // Deny by default: chain unreadable, RPC failure, timeout — all deny.
+    // Deny by default: chain unreadable, RPC failure, timeout — all
+    // deny. C1: the raw message may embed a credentialed RPC URL, so it
+    // is logged server-side only and the caller gets the sanitised form
+    // (our own timeout string is on the safe list and passes through).
+    console.error("[agentgate] Self verification error", err);
     return {
       valid: false,
-      error: err instanceof Error ? err.message : "Agent verification unavailable, try again later",
+      error: publicAgentError(err instanceof Error ? err.message : undefined),
     };
   } finally {
     if (timer) clearTimeout(timer);

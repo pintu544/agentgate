@@ -65,12 +65,20 @@ async function makeApp(overrides: Partial<SellerConfig> = {}) {
 }
 
 async function readLog(callLogPath: string) {
-  await new Promise((r) => setTimeout(r, 30)); // log writes land on res finish
-  const raw = await readFile(callLogPath, "utf8").catch(() => "");
-  return raw
-    .split("\n")
-    .filter((l) => l.trim().length > 0)
-    .map((l) => JSON.parse(l));
+  // Log writes land asynchronously on res finish; poll briefly instead
+  // of a fixed sleep, which raced the append under parallel-suite load.
+  const deadline = Date.now() + 3000;
+  let entries: ReturnType<typeof JSON.parse>[] = [];
+  while (Date.now() < deadline) {
+    const raw = await readFile(callLogPath, "utf8").catch(() => "");
+    entries = raw
+      .split("\n")
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l));
+    if (entries.length > 0) break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return entries;
 }
 
 beforeEach(() => {
@@ -221,9 +229,16 @@ describe("GET /health and /log", () => {
   it("log page renders recorded attempts", async () => {
     const { app } = await makeApp();
     await request(app).post("/api/snapshot").send({ topic: "Acme Corp" });
-    await new Promise((r) => setTimeout(r, 30));
-    const res = await request(app).get("/log");
-    expect(res.status).toBe(200);
-    expect(res.text).toContain("denied");
+    // Poll: the log append lands asynchronously on res finish.
+    let text = "";
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      const res = await request(app).get("/log");
+      expect(res.status).toBe(200);
+      text = res.text;
+      if (text.includes("denied")) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(text).toContain("denied");
   });
 });

@@ -34,9 +34,19 @@ function firstSentence(text: string, max = 220): string {
   return (end > 40 ? cut.slice(0, end + 1) : cut).trim();
 }
 
-export async function generateSnapshot(topic: string, apiKey: string): Promise<Snapshot> {
+/** Upper bound on a single Exa request (QA finding W4). */
+export const EXA_TIMEOUT_MS = 20_000;
+
+export async function generateSnapshot(
+  topic: string,
+  apiKey: string,
+  timeoutMs: number = EXA_TIMEOUT_MS,
+): Promise<Snapshot> {
   const response = await fetch("https://api.exa.ai/search", {
     method: "POST",
+    // On timeout the fetch rejects and the caller surfaces its existing
+    // clean 502 error — a hung Exa can no longer hang the request.
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       "content-type": "application/json",
       "x-api-key": apiKey,

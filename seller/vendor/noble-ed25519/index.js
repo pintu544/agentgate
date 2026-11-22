@@ -27,7 +27,22 @@ const SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
 const buf = (bytes) => Buffer.from(bytes);
 
+// Input-length contract, mirroring real @noble/ed25519 v3 exactly: every
+// entry point throws a RangeError on a wrong-length seed, public key or
+// signature (message format copied from the real package). Without this,
+// an over-length public key was silently truncated to its first 32
+// bytes — a contract the SDK was not written against.
+function expectLength(name, bytes, length) {
+  const got = bytes == null ? bytes : bytes.length;
+  if (typeof got !== "number" || got !== length) {
+    throw new RangeError(
+      `"${name}" expected Uint8Array of length ${length}, got length=${got}`,
+    );
+  }
+}
+
 function privateKeyFromSeed(seed) {
+  expectLength("secretKey", seed, 32);
   return createPrivateKey({
     key: Buffer.concat([PKCS8_PREFIX, buf(seed)]),
     format: "der",
@@ -36,6 +51,7 @@ function privateKeyFromSeed(seed) {
 }
 
 function publicKeyFromRaw(raw) {
+  expectLength("publicKey", raw, 32);
   return createPublicKey({
     key: Buffer.concat([SPKI_PREFIX, buf(raw)]),
     format: "der",
@@ -64,6 +80,10 @@ async function signAsync(message, seed) {
 }
 
 function verify(signature, message, publicKey) {
+  // Length errors throw (as in real noble); a well-formed-length but
+  // invalid signature or key still verifies to false.
+  expectLength("signature", signature, 64);
+  expectLength("publicKey", publicKey, 32);
   try {
     return nodeVerify(null, buf(message), publicKeyFromRaw(publicKey), buf(signature));
   } catch {

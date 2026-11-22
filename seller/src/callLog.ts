@@ -14,7 +14,13 @@ export type CallResult = "denied" | "payment-required" | "served";
 
 export interface CallLogEntry {
   ts: string;
+  /** Verified caller address; null when the call was not verified. */
   caller: string | null;
+  /**
+   * Address the caller merely claimed in its header on a denied
+   * attempt (W3) — unauthenticated, rendered distinctly on /log.
+   */
+  claimedAddress?: string | null;
   verified: boolean;
   result: CallResult;
   error?: string;
