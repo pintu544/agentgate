@@ -7,11 +7,11 @@ Slices are end-to-end and independently reviewable. Pintu-only steps are marked 
 - [x] T0.2 Fill Loops House Submit lane Step 1 (logo, name, tagline, description from SPEC). Done 22 Nov: all four fields saved and verified retained after a Back/Next round-trip (tagline 188/250). Note: the Preview lane only shows the project once the whole submission is finished — Step 1 alone does not make it previewable.
 
 ## Slice 1 — Seller service: the gate (Track 3 core)
-- [ ] T1.1 Scaffold the Express + TypeScript seller with the x402 v2 packages (`@x402/express`, `@x402/core`, `@x402/evm`) and `@selfxyz/agent-sdk`; health endpoint live. Done means: service runs locally and on Vercel with a 200 health check.
-- [ ] T1.2 Self Agent ID verification middleware, deny-by-default: raw body preserved, verifier errors/timeouts resolve to a 401 deny with the verifier's error string. Done means: an unsigned request and a request from an unregistered address both return 401 with distinct, correct error strings, and nothing is served.
-- [ ] T1.3 x402 payment gate on `POST /api/snapshot` via the Celo facilitator, explicit USDC price object. Done means: a verified-shaped request without payment returns 402 with valid payment requirements. (Full verified+paid path is proven in Slice 2.)
+- [x] T1.1 Scaffold the Express + TypeScript seller with the x402 v2 packages (`@x402/express`, `@x402/core`, `@x402/evm`) and `@selfxyz/agent-sdk`; health endpoint live. Done means: service runs locally and on Vercel with a 200 health check.
+- [x] T1.2 Self Agent ID verification middleware, deny-by-default: raw body preserved, verifier errors/timeouts resolve to a 401 deny with the verifier's error string. Done means: an unsigned request and a request from an unregistered address both return 401 with distinct, correct error strings, and nothing is served.
+- [x] T1.3 x402 payment gate on `POST /api/snapshot` via the Celo facilitator, explicit USDC price object. Done means: a verified-shaped request without payment returns 402 with valid payment requirements. (Full verified+paid path is proven in Slice 2.)
 - [ ] 👤 T1.4 Pintu creates the x402 facilitator API key at x402.celo.org, signing in with GitHub so the up-to-100 free mainnet settlement credits are granted (skipping forfeits them permanently). Done means: the key exists in Doppler as the seller's facilitator credential.
-- [ ] T1.5 Snapshot generation via Exa + append-only call log + public `GET /log` page. Done means: a served response contains summary, key facts and sources; every test attempt above appears in the log with its verification result.
+- [x] T1.5 Snapshot generation via Exa + append-only call log + public `GET /log` page. Done means: a served response contains summary, key facts and sources; every test attempt above appears in the log with its verification result.
 - [ ] T1.6 Adversarial QA pass on Slice 1 (fresh agent): replayed signatures, tampered bodies, oversized topics, verifier-timeout behaviour. Done means: no critical findings open.
 
 ## Slice 2 — Buyer agent and identity (Track 3 end-to-end)
