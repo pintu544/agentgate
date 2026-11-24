@@ -129,7 +129,7 @@ function requireVerifiedAgent(cfg: SellerConfig) {
     const timestamp = req.header("x-self-agent-timestamp");
     const keytype = req.header("x-self-agent-keytype");
     const agentKey = req.header("x-self-agent-key");
-    if (!signature || !timestamp || (keytype === "ed25519" && !agentKey)) {
+    if (!signature || !timestamp || (keytype?.toLowerCase() === "ed25519" && !agentKey)) {
       // Same machine-readable string the SDK's own middleware uses.
       deny(res, "Missing agent authentication headers");
       return;
@@ -250,6 +250,12 @@ export function createApp(overrides: Partial<SellerConfig> = {}) {
   ];
   if (paymentEnabled) chain.push(buildPaymentGate(cfg));
   chain.push(async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === "production" && !paymentEnabled) {
+      res
+        .status(503)
+        .json({ error: "Payment gate not configured; POST /api/snapshot is unavailable in production" });
+      return;
+    }
     if (!cfg.exaApiKey) {
       res.status(503).json({ error: "Snapshot generation is not configured" });
       return;
@@ -281,6 +287,9 @@ export function createApp(overrides: Partial<SellerConfig> = {}) {
       )
       .join("\n");
     res
+      .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+      .set("X-Content-Type-Options", "nosniff")
+      .set("X-Frame-Options", "DENY")
       .type("html")
       .send(
         `<!doctype html><html><head><meta charset="utf-8"><title>AgentGate — call log</title></head>` +

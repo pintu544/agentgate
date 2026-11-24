@@ -266,6 +266,20 @@ describe("QA: header fuzzing", () => {
     expect(res.status).toBe(401);
   });
 
+  it("F3: uppercase ED25519 keytype without agent key gets 'Missing agent authentication headers' — same as lowercase (F3)", async () => {
+    // After normalisation, 'ED25519' and 'ed25519' both trigger the guard.
+    // verifyMock must NOT be called — the early-exit fires before verification.
+    const { app } = await makeApp();
+    const res = await request(app)
+      .post("/api/snapshot")
+      .set({ ...SIGNED_HEADERS, "x-self-agent-keytype": "ED25519" })
+      // Deliberately omit x-self-agent-key
+      .send({ topic: "Acme" });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Missing agent authentication headers");
+    expect(verifyMock).not.toHaveBeenCalled();
+  });
+
   it("C1 regression: verifier error with stack-like content is replaced by the generic message", async () => {
     verifyMock.mockResolvedValue({
       valid: false,

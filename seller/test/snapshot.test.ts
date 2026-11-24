@@ -218,12 +218,59 @@ describe("POST /api/snapshot — x402 payment gate (configured)", () => {
   });
 });
 
+describe("POST /api/snapshot — production payment gate guard (F1)", () => {
+  it("returns 503 in production when payment gate is not configured", async () => {
+    verifyMock.mockResolvedValue({
+      valid: true,
+      agentAddress: "0x1111111111111111111111111111111111111111",
+      agentId: "7",
+    });
+    const { app } = await makeApp(); // no x402ApiKey or sellerPayTo
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const res = await request(app)
+        .post("/api/snapshot")
+        .set(SIGNED_HEADERS)
+        .send({ topic: "Acme" });
+      expect(res.status).toBe(503);
+      expect(res.body.error).toMatch(/[Pp]ayment gate/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("serves a snapshot in non-production without payment config (unchanged behaviour)", async () => {
+    verifyMock.mockResolvedValue({
+      valid: true,
+      agentAddress: "0x1111111111111111111111111111111111111111",
+      agentId: "7",
+    });
+    const { app } = await makeApp(); // no payment config, NODE_ENV is "test" by default
+    const res = await request(app)
+      .post("/api/snapshot")
+      .set(SIGNED_HEADERS)
+      .send({ topic: "Acme" });
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("GET /health and /log", () => {
   it("health answers 200", async () => {
     const { app } = await makeApp();
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
+  });
+
+  it("log page includes security headers (F5)", async () => {
+    const { app } = await makeApp();
+    const res = await request(app).get("/log");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-security-policy"]).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'",
+    );
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["x-frame-options"]).toBe("DENY");
   });
 
   it("log page renders recorded attempts", async () => {
